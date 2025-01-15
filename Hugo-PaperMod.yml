@@ -1,30 +1,30 @@
-name: Deploy Hugo site to Pages
+name: Deploy Hugo site to Pages  # 部署 Hugo 站点到 GitHub Pages
 
 # 触发条件
 on:
   push:
-    branches: [ main ]  # 当main分支收到推送时触发
+    branches: [ main ]  # 当 main 分支收到推送时触发
   schedule:
-    - cron: '0 2 * * *'  # 每天UTC时间2点（北京时间10点）自动运行
-  workflow_dispatch:      # 支持手动触发
+    - cron: '0 2 * * *'  # 每天 UTC 时间 2 点（北京时间 10 点）自动运行
+  workflow_dispatch:  # 支持手动触发
 
 # 所需权限
 permissions:
-  contents: read        # 仓库内容读取权限
-  pages: write         # GitHub Pages写入权限
-  id-token: write      # 身份令牌写入权限
+  contents: read  # 仓库内容读取权限
+  pages: write  # GitHub Pages 写入权限
+  id-token: write  # 身份令牌写入权限
 
 # 并发控制
 concurrency:
-  group: "pages"       # 并发组名称
+  group: "pages"  # 并发组名称
   cancel-in-progress: false  # 不取消正在进行的工作流
 
 jobs:
   build-deploy:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest  # 使用最新的 Ubuntu 运行器
     environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      name: github-pages  # 环境名称
+      url: ${{ steps.deployment.outputs.page_url }}  # 部署后的页面 URL
     
     steps:
       # 检出代码
@@ -33,18 +33,18 @@ jobs:
         with:
           submodules: 'recursive'  # 递归克隆子模块
 
-      # 设置Hugo环境
+      # 设置 Hugo 环境
       - name: Setup Hugo
         uses: peaceiris/actions-hugo@v2
         with:
-          hugo-version: 'latest'   # 使用最新版本的Hugo
-          extended: true           # 使用Hugo扩展版
+          hugo-version: 'latest'  # 使用最新版本的 Hugo
+          extended: true  # 使用 Hugo 扩展版
 
-      # 配置GitHub Pages
+      # 配置 GitHub Pages
       - name: Setup Pages
         uses: actions/configure-pages@v4
 
-      # 下载Hugo主题
+      # 下载 Hugo 主题
       - name: Download PaperMod theme
         run: |
           mkdir -p themes
@@ -55,13 +55,13 @@ jobs:
             local date=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
             local category=$(dirname "$file" | sed 's|^./||')
             
-            # Skip if front matter exists
+            # 如果 front matter 已存在则跳过
             if grep -q "^---" "$file"; then
               cp "$file" "content/$category/$title.md"
               return
             fi
             
-            # Generate new front matter
+            # 生成新的 front matter
             {
               echo "---"
               echo "title: \"$title\""
@@ -72,19 +72,20 @@ jobs:
             } > "content/$category/$title.md"
           }
 
-          # Process all .md files except README.md
+          # 处理所有 .md 文件，除了 README.md
           find . -type f -name "*.md" ! -name "README.md" | while read file; do
             dir=$(dirname "$file" | sed 's|^./||')
             mkdir -p "content/$dir"
             generate_front_matter "$file"
           done
 
+      # 配置 Hugo
       - name: Configure Hugo
         run: |
           cat > config.toml << EOL
           baseURL = "https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}"
           languageCode = "zh-cn"
-            title = "${{ github.repository_owner }}'s Space"
+          title = "${{ github.repository_owner }}'s Space"
           theme = "PaperMod"
           
           # 启用搜索所需的输出
@@ -142,14 +143,17 @@ jobs:
           ---
           EOL
 
+      # 构建站点
       - name: Build site
         run: hugo --minify
 
+      # 上传构建产物
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: ./public
 
+      # 部署到 GitHub Pages
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
