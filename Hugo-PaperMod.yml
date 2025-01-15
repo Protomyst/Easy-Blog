@@ -1,98 +1,98 @@
-name: Deploy Hugo site to Pages  # 部署 Hugo 站点到 GitHub Pages
+name: Deploy Hugo site to Pages
 
-# 触发条件
 on:
   push:
-    branches: [ main ]  # 当 main 分支收到推送时触发
+    branches: [ main ]
   schedule:
-    - cron: '0 2 * * *'  # 每天 UTC 时间 2 点（北京时间 10 点）自动运行
-  workflow_dispatch:  # 支持手动触发
+    - cron: '0 2 * * *'
+  workflow_dispatch:
 
-# 所需权限
 permissions:
-  contents: read  # 仓库内容读取权限
-  pages: write  # GitHub Pages 写入权限
-  id-token: write  # 身份令牌写入权限
+  contents: read
+  pages: write
+  id-token: write
 
-# 并发控制
 concurrency:
-  group: "pages"  # 并发组名称
-  cancel-in-progress: false  # 不取消正在进行的工作流
+  group: "pages"
+  cancel-in-progress: false
 
 jobs:
   build-deploy:
-    runs-on: ubuntu-latest  # 使用最新的 Ubuntu 运行器
+    runs-on: ubuntu-latest
     environment:
-      name: github-pages  # 环境名称
-      url: ${{ steps.deployment.outputs.page_url }}  # 部署后的页面 URL
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     
     steps:
-      # 检出代码
+      # 1. 检出代码
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          submodules: 'recursive'  # 递归克隆子模块
+          submodules: 'recursive'
 
-      # 设置 Hugo 环境
+      # 2. 设置 Hugo 环境
       - name: Setup Hugo
         uses: peaceiris/actions-hugo@v2
         with:
-          hugo-version: 'latest'  # 使用最新版本的 Hugo
-          extended: true  # 使用 Hugo 扩展版
+          hugo-version: 'latest'
+          extended: true
 
-      # 配置 GitHub Pages
+      # 3. 配置 GitHub Pages
       - name: Setup Pages
         uses: actions/configure-pages@v4
 
-      # 下载 Hugo 主题
+      # 4. 下载 PaperMod 主题 + 处理文档
       - name: Download PaperMod theme
         run: |
           mkdir -p themes
           git clone https://github.com/adityatelange/hugo-PaperMod.git themes/PaperMod
+          
           generate_front_matter() {
             local file="$1"
             local title=$(basename "$file" .md)
             local date=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
             local category=$(dirname "$file" | sed 's|^./||')
             
-            # 如果 front matter 已存在则跳过
-            if sed -n '1{/^---$/h}; /^---$/{x;p;q}; H' "$file" | grep -q "^---$"; then
+            # 如果已有 front matter，就直接复制过去
+            if grep -q "^---" "$file"; then
               cp "$file" "content/$category/$title.md"
               return
             fi
             
-            # 生成新的 front matter
+            # 否则自动生成 front matter
             {
               echo "---"
               echo "title: \"$title\""
               echo "date: $date"
               echo "categories: [\"$category\"]"
+              #如果想统一用同一个类型，取消下面行的注释：
+              echo "type: \"post\""
               echo "---"
               cat "$file"
             } > "content/$category/$title.md"
           }
-
-          # 处理所有 .md 文件，除了 README.md
+          
+          # 拷贝所有 md 文件（除了 README.md）
           find . -type f -name "*.md" ! -name "README.md" | while read file; do
             dir=$(dirname "$file" | sed 's|^./||')
             mkdir -p "content/$dir"
             generate_front_matter "$file"
           done
 
-      # 配置 Hugo
+      # 5. Hugo 配置文件（在这里进行修复：明确指定 mainSections）
       - name: Configure Hugo
         run: |
           cat > config.toml << EOL
-          baseURL = "https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}"
+          baseURL = "https://doc.protomyst.com"
           languageCode = "zh-cn"
           title = "${{ github.repository_owner }}'s Space"
           theme = "PaperMod"
-          
-          # 启用搜索所需的输出
-          [outputs]
-            home = ["HTML", "RSS", "JSON"]
-          
+
+          # 修改点：让主题把所有子文件夹都视为主要 section
           [params]
+            # 比如你的文件夹分别叫 Articles、技术文档、笔记
+            # mainSections = ["articles", "技术文档", "笔记"]
+            
             defaultTheme = "auto"
             ShowReadingTime = true
             ShowShareButtons = false
@@ -100,17 +100,24 @@ jobs:
             ShowBreadCrumbs = true
             ShowCodeCopyButtons = true
             ShowToc = true
-            
-            # 添加首页信息
+
             [params.homeInfoParams]
               Title = "欢迎来到 ${{ github.repository_owner }} 的文档站"
               Content = "在喧嚣时代中静心思考，用文字传递理性与希望。"
-            
-            # 可以添加社交媒体链接
+
             [[params.socialIcons]]
               name = "github"
               url = "https://github.com/${{ github.repository_owner }}"
-          
+
+          # Hugo 的输出
+          [outputs]
+            home = ["HTML", "RSS", "JSON"]
+
+          # 若你需要自定义分类、标签等，也可在这里设置
+          [taxonomies]
+            category = "categories"
+            tag = "tags"
+
           [menu]
             main = [
               {identifier = "archives", name = "Archives", url = "/archives/", weight = 10},
@@ -119,11 +126,11 @@ jobs:
               {identifier = "tags", name = "Tags", url = "/tags/", weight = 40}
             ]
           EOL
-
-          # 创建必要的页面
-          mkdir -p content
           
-          # 创建搜索页面
+          # 创建必须的内容目录
+          mkdir -p content
+
+          # 搜索页面
           cat > content/search.md << EOL
           ---
           title: "Search"
@@ -132,8 +139,8 @@ jobs:
           placeholder: "搜索文章..."
           ---
           EOL
-          
-          # 创建归档页面
+
+          # 归档页面
           cat > content/archives.md << EOL
           ---
           title: "Archives"
@@ -143,17 +150,17 @@ jobs:
           ---
           EOL
 
-      # 构建站点
+      # 6. Hugo 构建站点
       - name: Build site
         run: hugo --minify
 
-      # 上传构建产物
+      # 7. 上传构建产物
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: ./public
 
-      # 部署到 GitHub Pages
+      # 8. 部署到 GitHub Pages
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
