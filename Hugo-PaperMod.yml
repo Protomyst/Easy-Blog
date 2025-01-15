@@ -91,7 +91,7 @@ jobs:
           # 修改点：让主题把所有子文件夹都视为主要 section
           [params]
             # 比如你的文件夹分别叫 Articles、技术文档、笔记
-            # mainSections = ["articles", "技术文档", "笔记"]
+            mainSections = ["Doc1", "新年献词"]
             
             defaultTheme = "auto"
             ShowReadingTime = true
