@@ -40,7 +40,7 @@
 - 勾选 “Add a README.md”  
 - 点击 “Create repository”
 
-![Create repository](assets\image.png)
+![Create repository](assets/image.png)
 
 ## 二、添加文档
 ### 创建文档目录
@@ -50,7 +50,7 @@
 ### 添加文档文件
 - 将 Markdown 文件放入相应目录
 
-![alt text](assets\image-1.png)
+![alt text](assets/image-1.png)
 示例结构：
 ```plaintext
 Articles/
@@ -74,14 +74,14 @@ Articles/
 - 在 “Build and deployment” 下  
 - Source 选择 “GitHub Actions”
 - 点击蓝色小字 “Create Your Own”
-![Create Your Own](assets\image-2.png)
+![Create Your Own](assets/image-2.png)
 
 ### 配置工作流
 - 打开 [我写好的 Github Action](https://github.com/Protomyst/Easy-Blog/blob/main/Hugo-PaperMod.yml)
 - 复制全部内容到你自己的Github Action的文件编辑器，将文件命名为 `Hugo-PaperMod.yml`
 - 点击 "Commit changes..." 保存工作流，将会自动触发部署
 - 等待部署完成后访问：https://[你的用户名].github.io/[你的仓库名]，即可看到文档网站
-![网站图片](assets\image-3.png)
+![网站图片](assets/image-3.png)
 
 【注】：配置完成后，每次推送更改都会自动触发部署。
 
@@ -133,12 +133,12 @@ Articles/
      - 主机记录：docs
      - 记录值：185.199.108.153
    - 【注】Cloudflare 用户请不要开启 CDN 功能（小黄云）
-  ![DNS 配置](assets\image-4.png)
+  ![DNS 配置](assets/image-4.png)
 1. 等待 DNS 生效
     - 一般 1-2 小时
 2. 启用 HTTPS  
    - 等证书签发后，选中“Enforce HTTPS” 复选框（否则浏览器会提示不安全）
-![效果图](assets\image-5.png)
+![效果图](assets/image-5.png)
 ---
 
 # 让我们一起共建有料的网站吧！
