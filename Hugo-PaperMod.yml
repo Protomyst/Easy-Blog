@@ -4,7 +4,7 @@ on:
   push:
     branches: [ main ]
   schedule:
-    - cron: '0 2 * * *'
+    - cron: '0 2 * * *'  # UTC 每天2点
   workflow_dispatch:
 
 permissions:
@@ -30,7 +30,7 @@ jobs:
         with:
           submodules: 'recursive'
 
-      # 2. 设置 Hugo 环境
+      # 2. 设置 Hugo
       - name: Setup Hugo
         uses: peaceiris/actions-hugo@v2
         with:
@@ -41,58 +41,60 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v4
 
-      # 4. 下载 PaperMod 主题 + 处理文档
+      # 4. 下载 PaperMod 主题 & 处理文档
       - name: Download PaperMod theme
         run: |
           mkdir -p themes
           git clone https://github.com/adityatelange/hugo-PaperMod.git themes/PaperMod
           
+          # 这里的重点：把所有 .md 文件都写为 type = "post"
           generate_front_matter() {
             local file="$1"
             local title=$(basename "$file" .md)
             local date=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
             local category=$(dirname "$file" | sed 's|^./||')
-            
-            # 如果已有 front matter，就直接复制过去
+
+            # 如果已有 front matter，就直接复制
             if grep -q "^---" "$file"; then
               cp "$file" "content/$category/$title.md"
               return
             fi
-            
-            # 否则自动生成 front matter
+
+            # 若没有 front matter，自动生成
             {
               echo "---"
               echo "title: \"$title\""
               echo "date: $date"
+              # 想按目录来区分分类，可保留这一行
               echo "categories: [\"$category\"]"
-              #如果想统一用同一个类型，取消下面行的注释：
+              # ★★ 修复点：统一指定所有文章的 type = "post" ★★
               echo "type: \"post\""
               echo "---"
               cat "$file"
             } > "content/$category/$title.md"
           }
-          
-          # 拷贝所有 md 文件（除了 README.md）
+
+          # 遍历所有 md 文件（排除 README.md）
           find . -type f -name "*.md" ! -name "README.md" | while read file; do
             dir=$(dirname "$file" | sed 's|^./||')
             mkdir -p "content/$dir"
             generate_front_matter "$file"
           done
 
-      # 5. Hugo 配置文件（在这里进行修复：明确指定 mainSections）
+      # 5. 创建并写入 Hugo 配置
       - name: Configure Hugo
         run: |
           cat > config.toml << EOL
-          baseURL = "https://doc.protomyst.com"
+          baseURL = "https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}"
           languageCode = "zh-cn"
           title = "${{ github.repository_owner }}'s Space"
           theme = "PaperMod"
 
-          # 修改点：让主题把所有子文件夹都视为主要 section
           [params]
-            # 比如你的文件夹分别叫 Articles、技术文档、笔记
-            mainSections = ["Doc1", "新年献词"]
-            
+            # 指定 mainSections 只有一个: "post"
+            # 因为我们在上面把所有文件都设为 type = "post"
+            mainSections = ["post"]
+
             defaultTheme = "auto"
             ShowReadingTime = true
             ShowShareButtons = false
@@ -109,11 +111,10 @@ jobs:
               name = "github"
               url = "https://github.com/${{ github.repository_owner }}"
 
-          # Hugo 的输出
           [outputs]
             home = ["HTML", "RSS", "JSON"]
 
-          # 若你需要自定义分类、标签等，也可在这里设置
+          # 想自定义分类和标签名称，可在这里改
           [taxonomies]
             category = "categories"
             tag = "tags"
@@ -126,8 +127,8 @@ jobs:
               {identifier = "tags", name = "Tags", url = "/tags/", weight = 40}
             ]
           EOL
-          
-          # 创建必须的内容目录
+
+          # 至少留个 content 目录
           mkdir -p content
 
           # 搜索页面
@@ -150,7 +151,7 @@ jobs:
           ---
           EOL
 
-      # 6. Hugo 构建站点
+      # 6. Hugo 构建
       - name: Build site
         run: hugo --minify
 
