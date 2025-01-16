@@ -85,7 +85,7 @@ jobs:
       - name: Configure Hugo
         run: |
           cat > config.toml << EOL
-          baseURL = "https://doc.protomyst.com"
+          baseURL = "https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}"
           languageCode = "zh-cn"
           title = "${{ github.repository_owner }}'s Space"
           theme = "PaperMod"
