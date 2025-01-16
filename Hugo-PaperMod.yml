@@ -55,7 +55,7 @@ jobs:
             local category=$(dirname "$file" | sed 's|^./||')
 
             # 如果已有 front matter，就直接复制
-            if grep -q "^---" "$file"; then
+            if sed -n '1{/^---$/h}; /^---$/{x;p;q}; H' "$file" | grep -q "^---$"; then
               cp "$file" "content/$category/$title.md"
               return
             fi
