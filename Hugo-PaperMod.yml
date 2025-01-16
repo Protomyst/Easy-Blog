@@ -4,7 +4,7 @@ on:
   push:
     branches: [ main ]
   schedule:
-    - cron: '0 2 * * *'  # UTC 每天2点
+    - cron: '0 2 * * *'  # 每天 UTC 时间 2 点
   workflow_dispatch:
 
 permissions:
@@ -24,13 +24,13 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     
     steps:
-      # 1. 检出代码
+      # 1. 检出仓库代码
       - name: Checkout
         uses: actions/checkout@v4
         with:
           submodules: 'recursive'
 
-      # 2. 设置 Hugo
+      # 2. 安装 Hugo
       - name: Setup Hugo
         uses: peaceiris/actions-hugo@v2
         with:
@@ -41,58 +41,99 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v4
 
-      # 4. 下载 PaperMod 主题 & 处理文档
-      - name: Download PaperMod theme
+      # 4. 准备 content（复制附件 & 处理 Markdown）
+      - name: Prepare content
         run: |
+          # 下载 PaperMod 主题
           mkdir -p themes
           git clone https://github.com/adityatelange/hugo-PaperMod.git themes/PaperMod
-          
-          # 这里的重点：把所有 .md 文件都写为 type = "post"
-          generate_front_matter() {
-            local file="$1"
-            local title=$(basename "$file" .md)
-            local date=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-            local category=$(dirname "$file" | sed 's|^./||')
 
-            # 如果已有 front matter，就直接复制
-            if grep -q "^---" "$file"; then
-              cp "$file" "content/$category/$title.md"
-              return
+          # 创建 content 目录，Hugo 默认从 content/ 读取内容
+          mkdir -p content
+
+          # 判断是否跳过某些文件/目录的函数
+          should_skip() {
+            local p="$1"
+
+            # 跳过 .git / .github / 顶层 README.md / 以及 workflow 配置文件本身
+            if [[ "$p" == ./.git* || "$p" == ./.github* ]]; then
+              return 0  # 0 表示 true，这里选择跳过
+            fi
+            # 如果你有更多需要跳过的文件或目录，可在此添加规则
+
+            # 跳过顶层 README.md（可按需调整）
+            if [[ "$p" == ./README.md ]]; then
+              return 0
             fi
 
-            # 若没有 front matter，自动生成
-            {
-              echo "---"
-              echo "title: \"$title\""
-              echo "date: $date"
-              # 想按目录来区分分类，可保留这一行
-              echo "categories: [\"$category\"]"
-              # ★★ 修复点：统一指定所有文章的 type = "post" ★★
-              echo "type: \"post\""
-              echo "---"
-              cat "$file"
-            } > "content/$category/$title.md"
+            return 1  # 1 表示 false，不跳过
           }
 
-          # 遍历所有 md 文件（排除 README.md）
-          find . -type f -name "*.md" ! -name "README.md" | while read file; do
-            dir=$(dirname "$file" | sed 's|^./||')
-            mkdir -p "content/$dir"
-            generate_front_matter "$file"
-          done
+          # 自动生成或保留 Front Matter
+          generate_front_matter() {
+            local src_md="$1"
 
-      # 5. 创建并写入 Hugo 配置
+            # 以去掉开头的 "./" 作为相对路径（比如 docs/xx.md）
+            local rel_path="${src_md#./}"
+
+            local title=$(basename "$rel_path" .md)
+            local date=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+            # 取该 md 文件的上一级目录名作为分类（可随需求改进）
+            local category="$(dirname "$rel_path" | cut -d/ -f1)"
+
+            # 目标路径：content/ + 相对路径
+            local dest_md="content/$rel_path"
+            mkdir -p "$(dirname "$dest_md")"
+
+            # 如果已有 front matter，则原样复制
+            if grep -q "^---" "$src_md"; then
+              cp "$src_md" "$dest_md"
+            else
+              # 否则自动生成 front matter
+              {
+                echo "---"
+                echo "title: \"$title\""
+                echo "date: $date"
+                echo "categories: [\"$category\"]"
+                echo "type: \"post\""
+                echo "---"
+                cat "$src_md"
+              } > "$dest_md"
+            fi
+          }
+
+          # 遍历整个仓库，把文件复制到 content/ 下保持路径结构
+          # 先处理非 Markdown 文件（附件、图片等）
+          while IFS= read -r -d '' file; do
+            if should_skip "$file"; then
+              continue
+            fi
+            # 若是非 .md 文件，直接复制（保持路径结构）
+            dest="content/${file#./}"
+            mkdir -p "$(dirname "$dest")"
+            cp "$file" "$dest"
+          done < <(find . -type f ! -name "*.md" -print0)
+
+          # 再处理 .md 文件
+          while IFS= read -r -d '' mdfile; do
+            if should_skip "$mdfile"; then
+              continue
+            fi
+            generate_front_matter "$mdfile"
+          done < <(find . -type f -name "*.md" -print0)
+
+      # 5. 写入 Hugo 配置（config.toml）
       - name: Configure Hugo
         run: |
           cat > config.toml << EOL
-          baseURL = "https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}"
+          baseURL = "https://doc.protomyst.com"
           languageCode = "zh-cn"
           title = "${{ github.repository_owner }}'s Space"
           theme = "PaperMod"
 
           [params]
-            # 指定 mainSections 只有一个: "post"
-            # 因为我们在上面把所有文件都设为 type = "post"
+            # 所有文章都被设置为 type="post"，因此 mainSections = ["post"]
             mainSections = ["post"]
 
             defaultTheme = "auto"
@@ -114,7 +155,6 @@ jobs:
           [outputs]
             home = ["HTML", "RSS", "JSON"]
 
-          # 想自定义分类和标签名称，可在这里改
           [taxonomies]
             category = "categories"
             tag = "tags"
@@ -128,10 +168,8 @@ jobs:
             ]
           EOL
 
-          # 至少留个 content 目录
+          # 额外创建搜索页面 & 归档页面
           mkdir -p content
-
-          # 搜索页面
           cat > content/search.md << EOL
           ---
           title: "Search"
@@ -141,7 +179,6 @@ jobs:
           ---
           EOL
 
-          # 归档页面
           cat > content/archives.md << EOL
           ---
           title: "Archives"
