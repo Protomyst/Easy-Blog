@@ -22,6 +22,8 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+    env:
+      CUSTOM_DOMAIN: ${{ github.event.repository.pages.cname }}
     
     steps:
       # 1. 检出代码
@@ -29,15 +31,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: 'recursive'
-
-      - name: Detect domain from CNAME
-        run: |
-          if [ -f CNAME ]; then
-            domain=$(cat CNAME)
-          else
-            domain="${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}"
-          fi
-          echo "BASEURL=$domain" >> $GITHUB_ENV
 
       # 2. 设置 Hugo
       - name: Setup Hugo
@@ -90,11 +83,28 @@ jobs:
             generate_front_matter "$file"
           done
 
-      # 5. 创建并写入 Hugo 配置
+      # 5. 获取自定义域名
+      - name: Retrieve custom domain
+        id: fetch-domain
+        run: |
+          customDomain=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+          https://api.github.com/repos/${{ github.repository_owner }}/${{ github.event.repository.name }}/pages \
+          | jq -r '.cname // ""')
+          echo "CUSTOM_DOMAIN=$customDomain" >> $GITHUB_ENV
+
+      # 6. 创建并写入 Hugo 配置
       - name: Configure Hugo
         run: |
+          if [ -n "$CUSTOM_DOMAIN" ]; then
+            domain="$CUSTOM_DOMAIN"
+          else
+            owner="${GITHUB_REPOSITORY_OWNER}"
+            repo="$(echo $GITHUB_REPOSITORY | cut -d'/' -f2)"
+            domain="$owner.github.io/$repo"
+          fi
+
           cat > config.toml << EOL
-          baseURL = "https://${{ env.BASEURL }}"
+          baseURL = "https://$domain"
           languageCode = "zh-cn"
           title = "${{ github.repository_owner }}'s Space"
           theme = "PaperMod"
@@ -160,17 +170,17 @@ jobs:
           ---
           EOL
 
-      # 6. Hugo 构建
+      # 7. Hugo 构建
       - name: Build site
         run: hugo --minify
 
-      # 7. 上传构建产物
+      # 8. 上传构建产物
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: ./public
 
-      # 8. 部署到 GitHub Pages
+      # 9. 部署到 GitHub Pages
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
