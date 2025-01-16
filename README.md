@@ -119,10 +119,6 @@ Articles/
 1. GitHub 仓库设置
    - 仓库 > Settings > Pages > “Custom domain”  
    - 输入想要的域名并保存
-2. 修改 Github Action 文件
-   - 打开 `Hugo-PaperMod.yml` 文件，跳转到第 86 行
-   - 修改 `baseURL` 为你的域名（例：`baseURL = "https://(docs.)example.com"`）
-   - 保存并提交
 3. DNS 配置（任选一种）
    - 方法一：CNAME 记录
      - 类型：CNAME
@@ -134,9 +130,9 @@ Articles/
      - 记录值：185.199.108.153
    - 【注】Cloudflare 用户请不要开启 CDN 功能（小黄云）
   ![DNS 配置](assets/image-4.png)
-1. 等待 DNS 生效
+4. 等待 DNS 生效
     - 一般 1-2 小时
-2. 启用 HTTPS  
+5. 启用 HTTPS  
    - 等证书签发后，选中“Enforce HTTPS” 复选框（否则浏览器会提示不安全）
 ![效果图](assets/image-5.png)
 ---
