@@ -122,13 +122,20 @@ runs:
           "https://api.github.com/repos/$GITHUB_REPOSITORY/pages" \
           | jq -r '.cname // ""')
           
+        # 计算并输出调试信息
+        echo "Debug: github.repository = ${{ github.repository }}"
+        owner=${{ github.repository_owner }}
+        echo "Debug: owner = $owner"
+        repo=$(echo "${{ github.repository }}" | cut -d'/' -f2)
+        echo "Debug: repo = $repo"
+        
         # 设置域名
         if [ -n "$customDomain" ]; then
           domain="$customDomain"
+          echo "Debug: Using custom domain: $domain"
         else
-          owner="${GITHUB_REPOSITORY%/*}"
-          repo="${GITHUB_REPOSITORY#*/}"
           domain="$owner.github.io/$repo"
+          echo "Debug: Using default domain: $domain"
         fi
 
         # 创建Hugo配置
