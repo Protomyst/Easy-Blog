@@ -136,7 +136,7 @@ runs:
         cat > .github/hugo.toml << EOL
         baseURL = "https://$domain"
         languageCode = "zh-cn"
-        title = "${owner}'s Space"
+        title = "$owner's Space"
         theme = "PaperMod"
 
         [params]
@@ -150,12 +150,12 @@ runs:
         ShowToc = true
 
         [params.homeInfoParams]
-        Title = "欢迎来到 ${owner} 的文档站"
+        Title = "欢迎来到 $owner 的文档站"
         Content = "在喧嚣时代中静心思考，用文字传递理性与希望。"
 
         [[params.socialIcons]]
         name = "github"
-        url = "https://github.com/${owner}"
+        url = "https://github.com/$owner"
 
         [outputs]
         home = ["HTML", "RSS", "JSON"]
