@@ -77,8 +77,22 @@ Articles/
 ![Create Your Own](assets/image-2.png)
 
 ### 配置工作流
-- 打开 [我写好的 Github Action](https://github.com/Protomyst/Easy-Blog/blob/main/Hugo-PaperMod.yml)
-- 复制全部内容到你自己的Github Action的文件编辑器，将文件命名为 `Hugo-PaperMod.yml`
+- 输入
+  ```yaml
+  name: Hugo Deploy
+  
+  on:
+    push:
+      branches:
+        - main  # 或者你的主分支名称
+    workflow_dispatch:
+  
+  jobs:
+    deploy:
+      runs-on: ubuntu-latest
+      steps:
+      - name: Hugo PaperMod Deploy
+        uses: Protomyst/Hugo-PaperMod-Deploy@1.0.4
 - 点击 "Commit changes..." 保存工作流，将会自动触发部署
 - 等待部署完成后访问：https://[你的用户名].github.io/[你的仓库名]，即可看到文档网站
 ![网站图片](assets/image-3.png)
