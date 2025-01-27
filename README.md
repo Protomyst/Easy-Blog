@@ -87,12 +87,22 @@ Articles/
         - main  # 或者你的主分支名称
     workflow_dispatch:
   
+  permissions:
+    contents: write
+    pages: write
+    id-token: write
+  
   jobs:
     deploy:
       runs-on: ubuntu-latest
       steps:
       - name: Hugo PaperMod Deploy
-        uses: Protomyst/Hugo-PaperMod-Deploy@1.0.4
+        uses: Protomyst/Hugo-PaperMod-Deploy@1.0.5
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          # 可选配置：
+          # hugo_version: 'latest'          # Hugo 版本号，默认为最新版
+
 - 点击 "Commit changes..." 保存工作流，将会自动触发部署
 - 等待部署完成后访问：https://[你的用户名].github.io/[你的仓库名]，即可看到文档网站
 ![网站图片](assets/image-3.png)

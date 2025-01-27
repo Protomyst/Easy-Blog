@@ -4,44 +4,78 @@ author: 'Protomyst'
 branding:
   icon: 'upload-cloud'
   color: 'blue'
+
+inputs:
+  github_token:
+    description: 'GitHub Token，用于访问 API 和推送更改'
+    required: true
+  hugo_version:
+    description: 'Hugo 版本号'
+    required: false
+    default: 'latest'
+  custom_domain:
+    description: '自定义域名'
+    required: false
+  base_url:
+    description: '网站基础 URL'
+    required: false
+
 runs:
-  using: "composite"
+  using: 'composite'
   steps:
     - name: Checkout
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
+        submodules: recursive
 
     - name: Process Documents
+      id: process
       shell: bash
       run: |
+        # 创建日志目录
         mkdir -p .logs
+        
+        # 初始化计数器
         TOTAL=0
         PROCESSED=0
         FAILED=0
+        
         log() {
           echo "[$1] $2" | tee -a .logs/process.log
         }
+        
         process_file() {
           local file="$1"
           local title=$(basename "$file" .md)
           local utc_date
           local date
           local category
+          
+          # 获取最后提交时间
           utc_date=$(git log -1 --format="%aI" -- "$file" 2>/dev/null || date -u +"%Y-%m-%dT%H:%M:%SZ")
           date=$(TZ='Asia/Shanghai' date -d "$utc_date" +"%Y-%m-%dT%H:%M:%S+08:00")
           category=$(dirname "$file" | sed 's|^./||')
+          
+          # 检查是否已有 front matter
           if sed -n '1{/^---$/h}; /^---$/{x;p;q}; H' "$file" | grep -q "^---$"; then
             log "INFO" "跳过 $file: 已存在 front matter"
             return 0
           fi
+          
           log "INFO" "处理文件: $file"
+          
+          # 检查文件权限
           if [ ! -w "$file" ]; then
             log "ERROR" "无法写入文件: $file"
             return 1
           fi
+          
+          # 创建临时文件
           local temp_file
           temp_file=$(mktemp)
+          
+          # 生成新内容
           {
             echo "---"
             echo "title: \"$title\""
@@ -51,6 +85,8 @@ runs:
             echo "---"
             cat "$file"
           } > "$temp_file"
+          
+          # 更新文件
           if mv "$temp_file" "$file"; then
             log "SUCCESS" "已添加 front matter 到 $file"
             return 0
@@ -60,6 +96,8 @@ runs:
             return 1
           fi
         }
+        
+        # 处理所有 markdown 文件
         while IFS= read -r file; do
           TOTAL=$((TOTAL + 1))
           if process_file "$file"; then
@@ -68,133 +106,79 @@ runs:
             FAILED=$((FAILED + 1))
           fi
         done < <(find . -type f -name "*.md" ! -name "README.md")
+        
+        # 输出统计信息
         {
           echo "总文件数: $TOTAL"
           echo "成功处理: $PROCESSED"
           echo "处理失败: $FAILED"
         } | tee -a .logs/process.log
+        
+        # 设置输出
         echo "processed=$PROCESSED" >> "$GITHUB_OUTPUT"
         echo "failed=$FAILED" >> "$GITHUB_OUTPUT"
-    - name: Commit Front Matter changes
-      if: steps.process.outputs.processed > 0
+
+    - name: Configure Hugo Settings
+      id: configure
       shell: bash
       run: |
-        git config --local user.email "github-actions[bot]@users.noreply.github.com"
-        git config --local user.name "github-actions[bot]"
-        git add -A
-        git commit -m "chore: add front matter to documents
-        处理文件数: ${{ steps.process.outputs.processed }}
-        失败数: ${{ steps.process.outputs.failed }}
-        详细日志请查看 Actions 运行记录"
-        git push
+        HUGO_CONFIG="baseURL = \"${{ inputs.base_url || 'https://' + github.repository_owner + '.github.io/' + github.event.repository.name }}\"
+        languageCode = \"zh-cn\"
+        title = \"${{ github.repository_owner }}'s Space\"
+        theme = \"PaperMod\"
 
-    - name: Retrieve custom domain
-      shell: bash
-      run: |2
-        customDomain=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-          https://api.github.com/repos/${{ github.repository_owner }}/${{ github.event.repository.name }}/pages \
-          | jq -r '.cname // ""')
-        echo "CUSTOM_DOMAIN=$customDomain" >> $GITHUB_ENV
+        [params]
+        mainSections = [\"post\"]
+        defaultTheme = \"auto\"
+        ShowReadingTime = true
+        ShowShareButtons = false
+        ShowPostNavLinks = true
+        ShowBreadCrumbs = true
+        ShowCodeCopyButtons = true
+        ShowToc = true
 
-    - name: Create Hugo config
-      shell: bash
-      env:
-        HUGO_CONFIG: |
-          baseURL = "https://__DOMAIN__"
-          languageCode = "zh-cn"
-          title = "__OWNER__'s Space"
-          theme = "PaperMod"
-          [params]
-          mainSections = ["post"]
-          defaultTheme = "auto"
-          ShowReadingTime = true
-          ShowShareButtons = false
-          ShowPostNavLinks = true
-          ShowBreadCrumbs = true
-          ShowCodeCopyButtons = true
-          ShowToc = true
-          [params.homeInfoParams]
-          Title = "欢迎来到 **OWNER** 的文档站"
-          Content = "在喧嚣时代中静心思考，用文字传递理性与希望。"
-          [[params.socialIcons]]
-          name = "github"
-          url = "https://github.com/__OWNER__"
-          [outputs]
-          home = ["HTML", "RSS", "JSON"]
-          [taxonomies]
-          category = "categories"
-          tag = "tags"
-          [menu]
-          main = [
-          {identifier = "archives", name = "Archives", url = "/archives/", weight = 10},
-          {identifier = "categories", name = "Categories", url = "/categories/", weight = 20},
-          {identifier = "search", name = "Search", url = "/search/", weight = 30},
-          {identifier = "tags", name = "Tags", url = "/tags/", weight = 40}
-          ]
-      run: |2
-        if [ -n "$CUSTOM_DOMAIN" ]; then
-          domain="$CUSTOM_DOMAIN"
-        else
-          owner="${GITHUB_REPOSITORY_OWNER}"
-          repo="$(echo $GITHUB_REPOSITORY | cut -d'/' -f2)"
-          domain="$owner.github.io/$repo"
-        fi
-        if [ ! -f ".github/hugo.toml" ]; then
-          echo "创建 hugo.toml 配置文件"
-          mkdir -p .github
-          echo "$HUGO_CONFIG" > .github/hugo.toml
-          sed -i "s|__DOMAIN__|$domain|g" .github/hugo.toml
-          sed -i "s|__OWNER__|${GITHUB_REPOSITORY_OWNER}|g" .github/hugo.toml
-          echo "已创建 hugo.toml 配置文件"
-        else
-          echo "hugo.toml 配置文件已存在，跳过创建"
-        fi
+        [params.homeInfoParams]
+        Title = \"欢迎来到 ${{ github.repository_owner }} 的文档站\"
+        Content = \"在喧嚣时代中静心思考，用文字传递理性与希望。\"
 
-    - name: Commit Hugo settings
-      if: success()
-      shell: bash
-      run: |2
-        git config --local user.email "github-actions[bot]@users.noreply.github.com"
-        git config --local user.name "github-actions[bot]"
-        git add -A
-        if ! git diff --quiet --staged; then
-          git commit -m "chore: configure hugo settings"
-          git push || (git pull --rebase && git push)
+        [[params.socialIcons]]
+        name = \"github\"
+        url = \"https://github.com/${{ github.repository_owner }}\"
 
-    - name: Checkout latest code
-      uses: actions/checkout@v4
-      with:
-        submodules: recursive
-        fetch-depth: 0
-        ref: main
-        clean: false
+        [outputs]
+        home = [\"HTML\", \"RSS\", \"JSON\"]
 
-    - name: Pull latest changes
-      shell: bash
-      run: |
-        git fetch origin main
-        git checkout main
-        git pull origin main
+        [taxonomies]
+        category = \"categories\"
+        tag = \"tags\"
+
+        [menu]
+        main = [
+        {identifier = \"archives\", name = \"Archives\", url = \"/archives/\", weight = 10},
+        {identifier = \"categories\", name = \"Categories\", url = \"/categories/\", weight = 20},
+        {identifier = \"search\", name = \"Search\", url = \"/search/\", weight = 30},
+        {identifier = \"tags\", name = \"Tags\", url = \"/tags/\", weight = 40}
+        ]"
+
+        mkdir -p .github
+        echo "$HUGO_CONFIG" > .github/hugo.toml
 
     - name: Setup Hugo
       uses: peaceiris/actions-hugo@v2
       with:
-        hugo-version: 'latest'
+        hugo-version: ${{ inputs.hugo_version }}
         extended: true
 
-    - name: Setup Pages
-      uses: actions/configure-pages@v4
-
-    - name: Install PaperMod theme
+    - name: Install PaperMod Theme
       shell: bash
-      run: |2
+      run: |
         if [ ! -d "themes/PaperMod" ]; then
           git submodule add -b master https://github.com/adityatelange/hugo-PaperMod.git themes/PaperMod
         fi
 
-    - name: Create required pages
+    - name: Create Required Pages
       shell: bash
-      run: |2
+      run: |
         mkdir -p content
         cat > content/search.md << 'EOL'
         ---
@@ -204,6 +188,7 @@ runs:
         placeholder: "搜索文章..."
         ---
         EOL
+
         cat > content/archives.md << 'EOL'
         ---
         title: "Archives"
@@ -213,9 +198,9 @@ runs:
         ---
         EOL
 
-    - name: Copy and process content
+    - name: Copy and Process Content
       shell: bash
-      run: |2
+      run: |
         find . -type f \
           ! -path "*/\.*" \
           ! -path "*/themes/*" \
@@ -224,12 +209,13 @@ runs:
           ! -name "README.md" \
           ! -name "hugo.toml" \
           -exec cp --parents {} content/ \;
+
         find content -type f -name "*.md" -exec sed -i 's|\./\(images\|img\|assets\)/|../\1/|g' {} +
         find content -type f -name "*.md" -exec sed -i 's|\./|../|g' {} +
 
-    - name: Use configured hugo.toml
+    - name: Use Configured Hugo.toml
       shell: bash
-      run: |2
+      run: |
         if [ -f ".github/hugo.toml" ]; then
           cp .github/hugo.toml ./hugo.toml
         else
@@ -237,14 +223,13 @@ runs:
           exit 1
         fi
 
-    - name: Build site
+    - name: Build Site
       shell: bash
       run: hugo --gc --minify
 
-    - name: Upload artifact
-      uses: actions/upload-pages-artifact@v3
+    - name: Deploy
+      uses: peaceiris/actions-gh-pages@v3
       with:
-        path: ./public
-        
-    - name: Deploy to GitHub Pages
-      uses: actions/deploy-pages@v4
+        github_token: ${{ inputs.github_token }}
+        publish_dir: ./public
+        cname: ${{ inputs.custom_domain }}
