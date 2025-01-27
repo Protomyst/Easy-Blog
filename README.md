@@ -155,9 +155,11 @@ Articles/
    - 【注】Cloudflare 用户请不要开启 CDN 功能（小黄云）
   ![DNS 配置](assets/image-4.png)
 4. 等待 DNS 生效
-    - 一般 1-2 小时
+  - 一般 1-2 小时
 5. 启用 HTTPS  
-   - 等证书签发后，选中“Enforce HTTPS” 复选框（否则浏览器会提示不安全）
+  - 等证书签发后，选中“Enforce HTTPS” 复选框（否则浏览器会提示不安全）
+6. 重新部署
+  - 等待1-2分钟后刷新网站
 ![效果图](assets/image-5.png)
 ---
 
