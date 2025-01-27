@@ -1,6 +1,9 @@
 name: 'Hugo PaperMod Deploy'
 description: 'Hugo 博客一键部署，专注于写作，而不是工具配置。'
 author: 'Protomyst'
+branding:
+  icon: 'upload-cloud'
+  color: 'blue'
 runs:
   using: "composite"
   steps:
