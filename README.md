@@ -97,7 +97,7 @@ Articles/
       runs-on: ubuntu-latest
       steps:
       - name: Hugo PaperMod Deploy
-        uses: Protomyst/Hugo-PaperMod-Deploy@1.0.5
+        uses: Protomyst/Hugo-PaperMod-Deploy@1.0.4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           # 可选配置：

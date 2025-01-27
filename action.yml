@@ -2,22 +2,20 @@ name: 'Hugo PaperMod Deploy'
 description: 'Hugo 博客一键部署，专注于写作，而不是工具配置。'
 author: 'Protomyst'
 branding:
-  icon: 'upload-cloud'
+  icon: 'book'
   color: 'blue'
 
 inputs:
   github_token:
-    description: 'GitHub Token，用于访问 API 和推送更改'
+    description: 'GitHub token for API access'
     required: true
   hugo_version:
-    description: 'Hugo 版本号'
-    required: false
+    description: 'Hugo version to install'
     default: 'latest'
-  custom_domain:
-    description: '自定义域名'
     required: false
-  base_url:
-    description: '网站基础 URL'
+  extended:
+    description: 'Install Hugo extended version'
+    default: 'true'
     required: false
 
 runs:
@@ -30,7 +28,6 @@ runs:
         submodules: recursive
 
     - name: Process Documents
-      id: process
       shell: bash
       run: |
         # 创建日志目录
@@ -114,22 +111,37 @@ runs:
           echo "处理失败: $FAILED"
         } | tee -a .logs/process.log
         
-        # 设置输出
         echo "processed=$PROCESSED" >> "$GITHUB_OUTPUT"
         echo "failed=$FAILED" >> "$GITHUB_OUTPUT"
 
     - name: Configure Hugo Settings
-      id: configure
       shell: bash
       run: |
-        HUGO_CONFIG="baseURL = \"${{ inputs.base_url || format('https://{0}.github.io/{1}', github.repository_owner, github.repository.name) }}\"
-        languageCode = \"zh-cn\"
-        title = \"${{ format('{0}\'s Space', github.repository_owner) }}\"
-        theme = \"PaperMod\"
+        # Retrieve custom domain
+        customDomain=$(curl -s -H "Authorization: Bearer ${{ inputs.github_token }}" \
+          "https://api.github.com/repos/$GITHUB_REPOSITORY/pages" \
+          | jq -r '.cname // ""')
+          
+        # 设置域名
+        if [ -n "$customDomain" ]; then
+          domain="$customDomain"
+        else
+          owner="${GITHUB_REPOSITORY%/*}"
+          repo="${GITHUB_REPOSITORY#*/}"
+          domain="$owner.github.io/$repo"
+        fi
+
+        # 创建Hugo配置
+        mkdir -p .github
+        cat > .github/hugo.toml << EOL
+        baseURL = "https://$domain"
+        languageCode = "zh-cn"
+        title = "${owner}'s Space"
+        theme = "PaperMod"
 
         [params]
-        mainSections = [\"post\"]
-        defaultTheme = \"auto\"
+        mainSections = ["post"]
+        defaultTheme = "auto"
         ShowReadingTime = true
         ShowShareButtons = false
         ShowPostNavLinks = true
@@ -138,45 +150,46 @@ runs:
         ShowToc = true
 
         [params.homeInfoParams]
-        Title = \"${{ format('欢迎来到 {0} 的文档站', github.repository_owner) }}\"
-        Content = \"在喧嚣时代中静心思考，用文字传递理性与希望。\"
+        Title = "欢迎来到 ${owner} 的文档站"
+        Content = "在喧嚣时代中静心思考，用文字传递理性与希望。"
 
         [[params.socialIcons]]
-        name = \"github\"
-        url = \"${{ format('https://github.com/{0}', github.repository_owner) }}\"
+        name = "github"
+        url = "https://github.com/${owner}"
 
         [outputs]
-        home = [\"HTML\", \"RSS\", \"JSON\"]
+        home = ["HTML", "RSS", "JSON"]
 
         [taxonomies]
-        category = \"categories\"
-        tag = \"tags\"
+        category = "categories"
+        tag = "tags"
 
         [menu]
         main = [
-        {identifier = \"archives\", name = \"Archives\", url = \"/archives/\", weight = 10},
-        {identifier = \"categories\", name = \"Categories\", url = \"/categories/\", weight = 20},
-        {identifier = \"search\", name = \"Search\", url = \"/search/\", weight = 30},
-        {identifier = \"tags\", name = \"Tags\", url = \"/tags/\", weight = 40}
-        ]"
-
-        mkdir -p .github
-        echo "$HUGO_CONFIG" > .github/hugo.toml
+          {identifier = "archives", name = "Archives", url = "/archives/", weight = 10},
+          {identifier = "categories", name = "Categories", url = "/categories/", weight = 20},
+          {identifier = "search", name = "Search", url = "/search/", weight = 30},
+          {identifier = "tags", name = "Tags", url = "/tags/", weight = 40}
+        ]
+        EOL
 
     - name: Setup Hugo
       uses: peaceiris/actions-hugo@v2
       with:
         hugo-version: ${{ inputs.hugo_version }}
-        extended: true
+        extended: ${{ inputs.extended }}
 
-    - name: Install PaperMod Theme
+    - name: Setup Pages
+      uses: actions/configure-pages@v4
+
+    - name: Install PaperMod theme
       shell: bash
       run: |
         if [ ! -d "themes/PaperMod" ]; then
           git submodule add -b master https://github.com/adityatelange/hugo-PaperMod.git themes/PaperMod
         fi
 
-    - name: Create Required Pages
+    - name: Create required pages
       shell: bash
       run: |
         mkdir -p content
@@ -198,7 +211,7 @@ runs:
         ---
         EOL
 
-    - name: Copy and Process Content
+    - name: Copy and process content
       shell: bash
       run: |
         find . -type f \
@@ -213,7 +226,7 @@ runs:
         find content -type f -name "*.md" -exec sed -i 's|\./\(images\|img\|assets\)/|../\1/|g' {} +
         find content -type f -name "*.md" -exec sed -i 's|\./|../|g' {} +
 
-    - name: Use Configured Hugo.toml
+    - name: Use configured hugo.toml
       shell: bash
       run: |
         if [ -f ".github/hugo.toml" ]; then
@@ -223,13 +236,14 @@ runs:
           exit 1
         fi
 
-    - name: Build Site
+    - name: Build site
       shell: bash
       run: hugo --gc --minify
 
-    - name: Deploy
-      uses: peaceiris/actions-gh-pages@v3
+    - name: Upload artifact
+      uses: actions/upload-pages-artifact@v3
       with:
-        github_token: ${{ inputs.github_token }}
-        publish_dir: ./public
-        cname: ${{ inputs.custom_domain }}
+        path: ./public
+
+    - name: Deploy to GitHub Pages
+      uses: actions/deploy-pages@v4
