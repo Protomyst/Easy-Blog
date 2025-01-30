@@ -117,68 +117,73 @@ runs:
     - name: Configure Hugo Settings
       shell: bash
       run: |
-        # Retrieve custom domain
-        customDomain=$(curl -s -H "Authorization: Bearer ${{ inputs.github_token }}" \
-          "https://api.github.com/repos/$GITHUB_REPOSITORY/pages" \
-          | jq -r '.cname // ""')
+        # 只有在.github/hugo.toml不存在时才创建默认配置
+        if [ ! -f ".github/hugo.toml" ]; then
+          # Retrieve custom domain
+          customDomain=$(curl -s -H "Authorization: Bearer ${{ inputs.github_token }}" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/pages" \
+            | jq -r '.cname // ""')
+            
+          # 计算并输出调试信息
+          echo "Debug: github.repository = ${{ github.repository }}"
+          owner=${{ github.repository_owner }}
+          echo "Debug: owner = $owner"
+          repo=$(echo "${{ github.repository }}" | cut -d'/' -f2)
+          echo "Debug: repo = $repo"
           
-        # 计算并输出调试信息
-        echo "Debug: github.repository = ${{ github.repository }}"
-        owner=${{ github.repository_owner }}
-        echo "Debug: owner = $owner"
-        repo=$(echo "${{ github.repository }}" | cut -d'/' -f2)
-        echo "Debug: repo = $repo"
-        
-        # 设置域名
-        if [ -n "$customDomain" ]; then
-          domain="$customDomain"
-          echo "Debug: Using custom domain: $domain"
+          # 设置域名
+          if [ -n "$customDomain" ]; then
+            domain="$customDomain"
+            echo "Debug: Using custom domain: $domain"
+          else
+            domain="$owner.github.io/$repo"
+            echo "Debug: Using default domain: $domain"
+          fi
+
+          # 创建Hugo配置
+          mkdir -p .github
+          cat > .github/hugo.toml << EOL
+          baseURL = "https://$domain"
+          languageCode = "zh-cn"
+          title = "$owner's Space"
+          theme = "PaperMod"
+
+          [params]
+          mainSections = ["post"]
+          defaultTheme = "auto"
+          ShowReadingTime = true
+          ShowShareButtons = false
+          ShowPostNavLinks = true
+          ShowBreadCrumbs = true
+          ShowCodeCopyButtons = true
+          ShowToc = true
+
+          [params.homeInfoParams]
+          Title = "欢迎来到 $owner 的文档站"
+          Content = "在喧嚣时代中静心思考，用文字传递理性与希望。"
+
+          [[params.socialIcons]]
+          name = "github"
+          url = "https://github.com/$owner"
+
+          [outputs]
+          home = ["HTML", "RSS", "JSON"]
+
+          [taxonomies]
+          category = "categories"
+          tag = "tags"
+
+          [menu]
+          main = [
+            {identifier = "archives", name = "Archives", url = "/archives/", weight = 10},
+            {identifier = "categories", name = "Categories", url = "/categories/", weight = 20},
+            {identifier = "search", name = "Search", url = "/search/", weight = 30},
+            {identifier = "tags", name = "Tags", url = "/tags/", weight = 40}
+          ]
+          EOL
         else
-          domain="$owner.github.io/$repo"
-          echo "Debug: Using default domain: $domain"
+          echo "使用源仓库中的 .github/hugo.toml 配置"
         fi
-
-        # 创建Hugo配置
-        mkdir -p .github
-        cat > .github/hugo.toml << EOL
-        baseURL = "https://$domain"
-        languageCode = "zh-cn"
-        title = "$owner's Space"
-        theme = "PaperMod"
-
-        [params]
-        mainSections = ["post"]
-        defaultTheme = "auto"
-        ShowReadingTime = true
-        ShowShareButtons = false
-        ShowPostNavLinks = true
-        ShowBreadCrumbs = true
-        ShowCodeCopyButtons = true
-        ShowToc = true
-
-        [params.homeInfoParams]
-        Title = "欢迎来到 $owner 的文档站"
-        Content = "在喧嚣时代中静心思考，用文字传递理性与希望。"
-
-        [[params.socialIcons]]
-        name = "github"
-        url = "https://github.com/$owner"
-
-        [outputs]
-        home = ["HTML", "RSS", "JSON"]
-
-        [taxonomies]
-        category = "categories"
-        tag = "tags"
-
-        [menu]
-        main = [
-          {identifier = "archives", name = "Archives", url = "/archives/", weight = 10},
-          {identifier = "categories", name = "Categories", url = "/categories/", weight = 20},
-          {identifier = "search", name = "Search", url = "/search/", weight = 30},
-          {identifier = "tags", name = "Tags", url = "/tags/", weight = 40}
-        ]
-        EOL
 
     - name: Setup Hugo
       uses: peaceiris/actions-hugo@v2
