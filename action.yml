@@ -128,57 +128,67 @@ runs:
         echo "Debug: owner = $owner"
         repo=$(echo "${{ github.repository }}" | cut -d'/' -f2)
         echo "Debug: repo = $repo"
-        
-        # 设置域名
-        if [ -n "$customDomain" ]; then
-          domain="$customDomain"
-          echo "Debug: Using custom domain: $domain"
+
+        if [ -f ".github/hugo.toml" ]; then
+          echo "使用源仓库中的 hugo.toml 配置"
+          # 只更新 baseURL
+          if [ -n "$customDomain" ]; then
+            sed -i "s|^baseURL.*|baseURL = \"https://$customDomain\"|" .github/hugo.toml
+          else
+            sed -i "s|^baseURL.*|baseURL = \"https://$owner.github.io/$repo\"|" .github/hugo.toml
+          fi
         else
-          domain="$owner.github.io/$repo"
-          echo "Debug: Using default domain: $domain"
+          echo "创建默认 hugo.toml 配置"
+          
+          # 设置域名
+          domain="$customDomain"
+          if [ -z "$domain" ]; then
+            domain="$owner.github.io/$repo"
+          fi
+          echo "Debug: Using domain: $domain"
+
+          # 创建Hugo配置
+          mkdir -p .github
+          cat > .github/hugo.toml << EOL
+          baseURL = "https://$domain"
+          languageCode = "zh-cn"
+          title = "$owner's Space"
+          theme = "PaperMod"
+
+          [params]
+          mainSections = ["post"]
+          defaultTheme = "auto"
+          ShowReadingTime = true
+          ShowShareButtons = false
+          ShowPostNavLinks = true
+          ShowBreadCrumbs = true
+          ShowCodeCopyButtons = true
+          ShowToc = true
+
+          [params.homeInfoParams]
+          Title = "欢迎来到 $owner 的文档站"
+          Content = "在喧嚣时代中静心思考，用文字传递理性与希望。"
+
+          [[params.socialIcons]]
+          name = "github"
+          url = "https://github.com/$owner"
+
+          [outputs]
+          home = ["HTML", "RSS", "JSON"]
+
+          [taxonomies]
+          category = "categories"
+          tag = "tags"
+
+          [menu]
+          main = [
+            {identifier = "archives", name = "Archives", url = "/archives/", weight = 10},
+            {identifier = "categories", name = "Categories", url = "/categories/", weight = 20},
+            {identifier = "search", name = "Search", url = "/search/", weight = 30},
+            {identifier = "tags", name = "Tags", url = "/tags/", weight = 40}
+          ]
+          EOL
         fi
-
-        # 创建Hugo配置
-        mkdir -p .github
-        cat > .github/hugo.toml << EOL
-        baseURL = "https://$domain"
-        languageCode = "zh-cn"
-        title = "$owner's Space"
-        theme = "PaperMod"
-
-        [params]
-        mainSections = ["post"]
-        defaultTheme = "auto"
-        ShowReadingTime = true
-        ShowShareButtons = false
-        ShowPostNavLinks = true
-        ShowBreadCrumbs = true
-        ShowCodeCopyButtons = true
-        ShowToc = true
-
-        [params.homeInfoParams]
-        Title = "欢迎来到 $owner 的文档站"
-        Content = "在喧嚣时代中静心思考，用文字传递理性与希望。"
-
-        [[params.socialIcons]]
-        name = "github"
-        url = "https://github.com/$owner"
-
-        [outputs]
-        home = ["HTML", "RSS", "JSON"]
-
-        [taxonomies]
-        category = "categories"
-        tag = "tags"
-
-        [menu]
-        main = [
-          {identifier = "archives", name = "Archives", url = "/archives/", weight = 10},
-          {identifier = "categories", name = "Categories", url = "/categories/", weight = 20},
-          {identifier = "search", name = "Search", url = "/search/", weight = 30},
-          {identifier = "tags", name = "Tags", url = "/tags/", weight = 40}
-        ]
-        EOL
 
     - name: Setup Hugo
       uses: peaceiris/actions-hugo@v2
